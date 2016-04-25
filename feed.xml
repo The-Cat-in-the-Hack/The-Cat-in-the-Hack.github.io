@@ -1,0 +1,870 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>The Cat In The Hack</title>
+    <description>Findings, musings and how-tos on full-stack end-to-end software craftsmanship.</description>
+    <link></link>
+    <atom:link href="/feed.xml" rel="self" type="application/rss+xml" />
+    
+      <item>
+        <title>Loopback: Find &amp; Sift</title>
+        <description>&lt;h2 id=&quot;about-this-post&quot;&gt;About this post&lt;/h2&gt;
+
+&lt;h3 id=&quot;what-will-you-find-here-span-classabbrtldrspan&quot;&gt;What will you find here? &lt;span class=&quot;abbr&quot;&gt;(TL;DR)&lt;/span&gt;&lt;/h3&gt;
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;How loopback’s includes won’t work as expected, when you’re expecting it to work like &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt;’s &lt;code&gt;WHERE&lt;/code&gt;! :P&lt;/li&gt;
+  &lt;li&gt;A workaround so you can query loopback AND then sift (filter) your results using data anywhere in your results data structure.&lt;/li&gt;
+  &lt;li&gt;A tiny piece of code you can drop, as is, in your loopback project, to have this workaround enabled, at app boot time, in all your models.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;In a hurry?&lt;/p&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;Then place &lt;a href=&quot;http://www.github.com/The-Cat-in-the-Hack/loopback-find-sift/blob/master/server/boot/sift.js&quot; target=&quot;_blank&quot;&gt;this file&lt;/a&gt; in your &lt;code&gt;server/boot/&lt;/code&gt; folder and run &lt;code&gt;npm install --save sift&lt;/code&gt;;&lt;/li&gt;
+  &lt;li&gt;Use the added method in the nodejs api, or use the remote method exposed in the &lt;span class=&quot;abbr&quot;&gt;REST API&lt;/span&gt;.
+    &lt;ul&gt;
+      &lt;li&gt;First argument is the usual filter object&lt;/li&gt;
+      &lt;li&gt;Second argument is the object we’ll sift with. Read &lt;a href=&quot;https://github.com/crcn/sift.js#features&quot; target=&quot;_blank&quot;&gt;the sift docs&lt;/a&gt; for the syntax.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;who-is-this-post-for&quot;&gt;Who is this post for?&lt;/h3&gt;
+
+&lt;p&gt;If your loopback progression was anything like mine, it probably went like this:&lt;/p&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;get some models definitions going, create some things!&lt;/li&gt;
+  &lt;li&gt;retrieve things from your api client &lt;small&gt;— yay it works!&lt;/small&gt;&lt;/li&gt;
+  &lt;li&gt;then, retrieve things with some criteria&lt;/li&gt;
+  &lt;li&gt;get some relation definitions going, create related things!&lt;/li&gt;
+  &lt;li&gt;retrieve related things from your api client &lt;small&gt;— yay it works!&lt;/small&gt;&lt;/li&gt;
+  &lt;li&gt;try and fail to retrieve things with criteria spanning over relationships &lt;small&gt;— ooops…&lt;/small&gt;&lt;/li&gt;
+  &lt;li&gt;read and re-read the documentation &lt;small&gt;— what’s wrong with my code?!&lt;/small&gt;&lt;/li&gt;
+  &lt;li&gt;start writing custom remote methods to wrap multi-step queries  &lt;small&gt;— what’s wrong with loopback?!&lt;/small&gt;&lt;/li&gt;
+  &lt;li&gt;write one custom remote method too many, feels tired of this stuff  &lt;small&gt;— remote method fatigue kicks in&lt;/small&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Then this post is for you! :)&lt;/p&gt;
+
+&lt;h2 id=&quot;setting-up-our-example&quot;&gt;Setting up our example&lt;/h2&gt;
+
+&lt;h3 id=&quot;some-loopback-context&quot;&gt;Some loopback context&lt;/h3&gt;
+
+&lt;p&gt;&lt;small&gt;You can skip this if you’re familiar with loopback.&lt;/small&gt;&lt;/p&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;Server-side js, runs on node, on top of express. It’s a framework on the BaaS (Backend as a Service) space, kinda like Parse. I consider it to e deployd’s “spiritual successor”, given the shared core developers.&lt;/li&gt;
+  &lt;li&gt;The idea is that we get a lot of speed and flexibility when we write our backend with loopback models, relations, remote methods. &lt;span class=&quot;abbr&quot;&gt;ACL&lt;/span&gt;s, and so on, being able to reach out for the nodejs library ecossystem and avaliable expressjs middlewares is also really good.&lt;/li&gt;
+  &lt;li&gt;We can pick from a number of supported persistence backends, across different database paradigms, for our data, and that choice is on a model-by-model basis. Then there’s a query feature that makes sure that it’s still possible to reach out for related data, no matter where it is being persisted.&lt;/li&gt;
+  &lt;li&gt;Said query feature is good, but has limitations. The downside of that flexibility is that loopback can’t be smarter than the dumbest of the all officially-supported database’s query languages. So, we’re kinda getting the lowest common denominator here.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;get-the-sample-project-code&quot;&gt;Get the sample project code&lt;/h3&gt;
+
+&lt;p&gt;To play with the &lt;a href=&quot;http://www.github.com/The-Cat-in-the-Hack/loopback-find-sift&quot; target=&quot;_blank&quot;&gt;example project&lt;/a&gt;, follow these steps.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-bash&quot;&gt;$ git clone http://www.github.com/The-Cat-in-the-Hack/loopback-find-sift.git
+$ cd loopback-find-sift
+$ npm install
+$ node .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;then in another terminal, run&lt;/p&gt;
+
+&lt;pre style=&quot;white-space:pre-wrap !important;&quot;&gt;&lt;code class=&quot;language-bash&quot;&gt;$ curl -gs &#39;http://localhost:3000/api/Albums/sift?filter={&quot;include&quot;:[&quot;artist&quot;,&quot;label&quot;]}&amp;amp;sift={&quot;artist&quot;:{&quot;name&quot;:&quot;Pink+Floyd&quot;},&quot;label&quot;:{&quot;name&quot;:&quot;EMI&quot;}}&#39;  | jq .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;and you should get this output:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;[
+  {
+    &quot;title&quot;: &quot;The Dark Side of the Moon&quot;,
+    &quot;id&quot;: 2,
+    &quot;artistId&quot;: 1,
+    &quot;labelId&quot;: 1,
+    &quot;artist&quot;: {
+      &quot;name&quot;: &quot;Pink Floyd&quot;,
+      &quot;id&quot;: 1
+    },
+    &quot;label&quot;: {
+      &quot;name&quot;: &quot;EMI&quot;,
+      &quot;id&quot;: 1
+    }
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&quot;our-models-and-relations&quot;&gt;Our models and relations&lt;/h3&gt;
+
+&lt;p&gt;Let’s get a model going, using this diagram in &lt;strong&gt;Fig. 1&lt;/strong&gt; as a starting point.&lt;/p&gt;
+
+&lt;figure class=&quot;example&quot;&gt;
+		&lt;img src=&quot;/diagrams/posts/loopback-find-n-sift/er.png&quot; alt=&quot;&quot; class=&quot;plantuml&quot; /&gt;
+		&lt;figcaption class=&quot;example-figcaption&quot;&gt;
+			&lt;strong&gt;Fig. 1 | &lt;/strong&gt;Entity-Relationship diagram for our sample model
+		&lt;/figcaption&gt;
+&lt;/figure&gt;
+
+&lt;p class=&quot;code-caption&quot;&gt;&lt;code&gt;common/models/artist.json&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre style=&quot;white-space:pre-wrap;&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;{
+  &quot;name&quot;: &quot;Artist&quot;,
+  &quot;plural&quot;: &quot;Artists&quot;,
+  &quot;base&quot;: &quot;PersistedModel&quot;,
+  &quot;idInjection&quot;: true,
+  &quot;options&quot;: {
+    &quot;validateUpsert&quot;: true
+  },
+  &quot;properties&quot;: {
+    &quot;name&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;required&quot;: true
+    }
+  },
+  &quot;validations&quot;: [],
+  &quot;relations&quot;: {
+    &quot;albums&quot;: {
+      &quot;type&quot;: &quot;hasMany&quot;,
+      &quot;model&quot;: &quot;Album&quot;,
+      &quot;foreignKey&quot;: &quot;&quot;
+    }
+  },
+  &quot;acls&quot;: [],
+  &quot;methods&quot;: {}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p class=&quot;code-caption&quot;&gt;&lt;code&gt;common/models/album.json&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre style=&quot;white-space:pre-wrap;&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;{
+  &quot;name&quot;: &quot;Album&quot;,
+  &quot;plural&quot;: &quot;Albums&quot;,
+  &quot;base&quot;: &quot;PersistedModel&quot;,
+  &quot;idInjection&quot;: true,
+  &quot;options&quot;: {
+    &quot;validateUpsert&quot;: true
+  },
+  &quot;properties&quot;: {
+    &quot;title&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;required&quot;: true
+    }
+  },
+  &quot;validations&quot;: [],
+  &quot;relations&quot;: {
+    &quot;artist&quot;: {
+      &quot;type&quot;: &quot;belongsTo&quot;,
+      &quot;model&quot;: &quot;Artist&quot;,
+      &quot;foreignKey&quot;: &quot;&quot;
+    },
+    &quot;label&quot;: {
+      &quot;type&quot;: &quot;belongsTo&quot;,
+      &quot;model&quot;: &quot;Label&quot;,
+      &quot;foreignKey&quot;: &quot;&quot;
+    }
+  },
+  &quot;acls&quot;: [],
+  &quot;methods&quot;: {}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p class=&quot;code-caption&quot;&gt;&lt;code&gt;common/models/label.json&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre style=&quot;white-space:pre-wrap;&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;{
+  &quot;name&quot;: &quot;Label&quot;,
+  &quot;plural&quot;: &quot;Labels&quot;,
+  &quot;base&quot;: &quot;PersistedModel&quot;,
+  &quot;idInjection&quot;: true,
+  &quot;options&quot;: {
+    &quot;validateUpsert&quot;: true
+  },
+  &quot;properties&quot;: {
+    &quot;name&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;required&quot;: true
+    }
+  },
+  &quot;validations&quot;: [],
+  &quot;relations&quot;: {
+    &quot;albums&quot;: {
+      &quot;type&quot;: &quot;hasMany&quot;,
+      &quot;model&quot;: &quot;Album&quot;,
+      &quot;foreignKey&quot;: &quot;&quot;
+    }
+  },
+  &quot;acls&quot;: [],
+  &quot;methods&quot;: {}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And we’ll populate it with the data shown in &lt;strong&gt;Fig. 2&lt;/strong&gt; below &lt;a href=&quot;http://www.github.com/The-Cat-in-the-Hack/loopback-find-sift/blob/master/server/boot/sample-data.js&quot; target=&quot;_blank&quot;&gt;at boot time&lt;/a&gt;:&lt;/p&gt;
+
+&lt;figure class=&quot;example&quot;&gt;
+		&lt;img src=&quot;/diagrams/posts/loopback-find-n-sift/data.png&quot; alt=&quot;&quot; class=&quot;plantuml&quot; /&gt;
+		&lt;figcaption class=&quot;example-figcaption&quot;&gt;
+			&lt;strong&gt;Fig. 2 | &lt;/strong&gt;Our sample data.
+		&lt;/figcaption&gt;
+&lt;/figure&gt;
+
+&lt;h2 id=&quot;a-query-progression&quot;&gt;A query progression&lt;/h2&gt;
+
+&lt;p&gt;This is our default callback. From now on, we’ll refer to it just as &lt;code&gt;cb&lt;/code&gt; in our code snippets.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-javascript&quot;&gt;function cb(error, result) {
+  if (!error) {
+    // do something with the result
+  }
+  else {
+    // do something about the error
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&quot;the-simplest-query&quot;&gt;The simplest query&lt;/h3&gt;
+
+&lt;p&gt;Suppose we want &lt;strong&gt;All labels&lt;/strong&gt;. We write:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-javascript&quot;&gt;Label.find({}, cb);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;and we get this as the result:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;[
+  {
+    &quot;name&quot;: &quot;EMI&quot;,
+    &quot;id&quot;: 1
+  },
+  {
+    &quot;name&quot;: &quot;Parlophone&quot;,
+    &quot;id&quot;: 2
+  },
+  {
+    &quot;name&quot;: &quot;One Little Indian&quot;,
+    &quot;id&quot;: 3
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now (please bear with me, this will become relevant soon) if I were to write this in plain &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt;, this would be it:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-sql&quot;&gt;SELECT * from label;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Ok?&lt;/p&gt;
+
+&lt;p&gt;Moving on…&lt;/p&gt;
+
+&lt;h3 id=&quot;a-simple-query-with-include&quot;&gt;A simple query, with include&lt;/h3&gt;
+
+&lt;p&gt;Now let’s say we want &lt;strong&gt;All labels, including their albums&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;We write this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-javascript&quot;&gt;Label.find(
+    { include: [&#39;albums&#39;] },
+    cb
+  );
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And get this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;[
+  {
+    &quot;name&quot;: &quot;EMI&quot;,
+    &quot;id&quot;: 1,
+    &quot;albums&quot;: [
+      {
+        &quot;title&quot;: &quot;The Dark Side of the Moon&quot;,
+        &quot;id&quot;: 2,
+        &quot;artistId&quot;: 1,
+        &quot;labelId&quot;: 1
+      },
+      {
+        &quot;title&quot;: &quot;Fear of the Dark&quot;,
+        &quot;id&quot;: 4,
+        &quot;artistId&quot;: 2,
+        &quot;labelId&quot;: 1
+      }
+    ]
+  },
+  {
+    &quot;name&quot;: &quot;Parlophone&quot;,
+    &quot;id&quot;: 2,
+    &quot;albums&quot;: [
+      {
+        &quot;title&quot;: &quot;The Endless River&quot;,
+        &quot;id&quot;: 1,
+        &quot;artistId&quot;: 1,
+        &quot;labelId&quot;: 2
+      },
+      {
+        &quot;title&quot;: &quot;The Book of Souls&quot;,
+        &quot;id&quot;: 3,
+        &quot;artistId&quot;: 2,
+        &quot;labelId&quot;: 2
+      }
+    ]
+  },
+  {
+    &quot;name&quot;: &quot;One Little Indian&quot;,
+    &quot;id&quot;: 3,
+    &quot;albums&quot;: [
+      {
+        &quot;title&quot;: &quot;Selmasons: Dancer In The Dark&quot;,
+        &quot;id&quot;: 5,
+        &quot;artistId&quot;: 3,
+        &quot;labelId&quot;: 3
+      }
+    ]
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And the corresponding &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt; would be:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-sql&quot;&gt;SELECT * from label, album
+WHERE label.id = album.labelId;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;I hope we’re making sense so far.&lt;/p&gt;
+
+&lt;p&gt;Continuing…&lt;/p&gt;
+
+&lt;h3 id=&quot;a-simple-query-with-include-and-a-where-clause&quot;&gt;A simple query with include and a where clause&lt;/h3&gt;
+
+&lt;p&gt;Now let’s retrieve &lt;strong&gt;all albums matching a certain property, and include their labels and artists&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;We write this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-javascript&quot;&gt;Album.find(
+    {
+      where: {
+        title: &#39;The Dark Side of the Moon&#39;
+      },
+      include: [&#39;artist&#39;, &#39;label&#39;]
+    },
+    cb
+  );
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And get this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;[
+  {
+    &quot;title&quot;: &quot;The Dark Side of the Moon&quot;,
+    &quot;id&quot;: 2,
+    &quot;artistId&quot;: 1,
+    &quot;labelId&quot;: 1,
+    &quot;artist&quot;: {
+      &quot;name&quot;: &quot;Pink Floyd&quot;,
+      &quot;id&quot;: 1
+    },
+    &quot;label&quot;: {
+      &quot;name&quot;: &quot;EMI&quot;,
+      &quot;id&quot;: 1
+    }
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And this is the &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt; I’d write to get the same results.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-sql&quot;&gt;SELECT * from label, artist, album
+WHERE album.artistId = artist.id
+AND album.labelId = label.id
+AND album.title = &quot;The Dark Side of the Moon&quot;;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;By the way, I’m sticking to &lt;code&gt;WHERE&lt;/code&gt; clauses instead of &lt;code&gt;JOIN&lt;/code&gt; to keep it simple and avoid discussing the &lt;a href=&quot;http://blog.codinghorror.com/a-visual-explanation-of-sql-joins/&quot; target=&quot;_blank&quot;&gt;different types of &lt;code&gt;JOIN&lt;/code&gt;s&lt;/a&gt;, which can be confusing to some.&lt;/p&gt;
+
+&lt;p&gt;Until this point, thinking of loopback’s &lt;code&gt;include&lt;/code&gt;s as being something like &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt;’s &lt;code&gt;JOIN&lt;/code&gt;s was harmless.&lt;/p&gt;
+
+&lt;p&gt;But this is as far as we could get without breaking that mental model.&lt;/p&gt;
+
+&lt;p&gt;Let’s see what happens next.&lt;/p&gt;
+
+&lt;h3 id=&quot;cant-filter-on-a-related-models-properties&quot;&gt;Can’t filter on a related model’s properties&lt;/h3&gt;
+
+&lt;p&gt;Let’s try to get &lt;strong&gt;all albums by Pink Floyd and released by EMI&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;Because now we want to &lt;code&gt;include&lt;/code&gt; and also apply a &lt;code&gt;where&lt;/code&gt; clause at the same time, we need to switch to this alternate &lt;a href=&quot;https://docs.strongloop.com/display/public/LB/Include+filter#Includefilter-Includewithfilters&quot; target=&quot;_blank&quot;&gt;&lt;code&gt;include&lt;/code&gt; with filters&lt;/a&gt; syntax.&lt;/p&gt;
+
+&lt;p&gt;We write this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-javascript&quot;&gt;Album.find(
+    {
+      include: [
+        {
+          relation: &#39;label&#39;,
+          scope: {
+            where: { name: &#39;EMI&#39; }
+          }
+        },
+        {
+          relation: &#39;Artist&#39;,
+          scope: {
+            where: { name: &#39;Pink Floyd&#39; }
+          }
+        },
+       ]
+    },
+    cb
+  );
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And get this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;[
+  {
+    &quot;title&quot;: &quot;The Endless River&quot;,
+    &quot;id&quot;: 1,
+    &quot;artistId&quot;: 1,
+    &quot;labelId&quot;: 2,
+    &quot;artist&quot;: {
+      &quot;name&quot;: &quot;Pink Floyd&quot;,
+      &quot;id&quot;: 1
+    }
+  },
+  {
+    &quot;title&quot;: &quot;The Dark Side of the Moon&quot;,
+    &quot;id&quot;: 2,
+    &quot;artistId&quot;: 1,
+    &quot;labelId&quot;: 1,
+    &quot;label&quot;: {
+      &quot;name&quot;: &quot;EMI&quot;,
+      &quot;id&quot;: 1
+    },
+    &quot;artist&quot;: {
+      &quot;name&quot;: &quot;Pink Floyd&quot;,
+      &quot;id&quot;: 1
+    }
+  },
+  {
+    &quot;title&quot;: &quot;The Book of Souls&quot;,
+    &quot;id&quot;: 3,
+    &quot;artistId&quot;: 2,
+    &quot;labelId&quot;: 2
+  },
+  {
+    &quot;title&quot;: &quot;Fear of the Dark&quot;,
+    &quot;id&quot;: 4,
+    &quot;artistId&quot;: 2,
+    &quot;labelId&quot;: 1,
+    &quot;label&quot;: {
+      &quot;name&quot;: &quot;EMI&quot;,
+      &quot;id&quot;: 1
+    }
+  },
+  {
+    &quot;title&quot;: &quot;Selmasons: Dancer In The Dark&quot;,
+    &quot;id&quot;: 5,
+    &quot;artistId&quot;: 3,
+    &quot;labelId&quot;: 3
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;But this is what I was expecting:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;[
+  {
+    &quot;title&quot;: &quot;The Dark Side of the Moon&quot;,
+    &quot;id&quot;: 2,
+    &quot;artistId&quot;: 1,
+    &quot;labelId&quot;: 1,
+    &quot;artist&quot;: {
+      &quot;name&quot;: &quot;Pink Floyd&quot;,
+      &quot;id&quot;: 1
+    },
+    &quot;label&quot;: {
+      &quot;name&quot;: &quot;EMI&quot;,
+      &quot;id&quot;: 1
+    }
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And the corresponding &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt; query is not that much different from the others in the examples above.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-sql&quot;&gt;SELECT *
+FROM album, artist, label
+WHERE album.artistId = artist.id
+AND album.labelId = label.id
+AND label.name = &quot;EMI&quot;
+AND artist.name = &quot;Pink Floyd&quot;;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&quot;whats-going-on-loopback&quot;&gt;What’s going on, loopback?&lt;/h2&gt;
+
+&lt;h3 id=&quot;mental-model-mismatch&quot;&gt;Mental model mismatch&lt;/h3&gt;
+
+&lt;p&gt;Surprised by the returned data?&lt;/p&gt;
+
+&lt;p&gt;Then you probably’ve been “thinking in SQL” until now. I know I was, when this happened to me.&lt;/p&gt;
+
+&lt;p&gt;SQL is a declarative programming language. That is to say: with &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt;, we describe &lt;strong&gt;what&lt;/strong&gt; we want from the database, and it’s the database’s job to figure out the &lt;strong&gt;how&lt;/strong&gt; of getting it for us.&lt;/p&gt;
+
+&lt;p&gt;Loopback’s queries, on the other hand, behave like steps in a imperative programming language. We have state: the data structure holding the results gathered so far. Each included relation can change that state by adding more data to it, but they can’t change or remove data already there. When all &lt;code&gt;include&lt;/code&gt;s in the query have been processed the resulting data structure is returned. Check &lt;strong&gt;Fig. 3&lt;/strong&gt; below:&lt;/p&gt;
+
+&lt;figure class=&quot;example&quot;&gt;
+		&lt;img src=&quot;/diagrams/posts/loopback-find-n-sift/sequence_find.png&quot; alt=&quot;&quot; class=&quot;plantuml&quot; /&gt;
+		&lt;figcaption class=&quot;example-figcaption&quot;&gt;
+			&lt;strong&gt;Fig. 3 | &lt;/strong&gt;How a loopback query with &lt;code&gt;include&lt;/code&gt;s is processed.
+		&lt;/figcaption&gt;
+&lt;/figure&gt;
+
+&lt;h3 id=&quot;a-imperative-two-step-workaround&quot;&gt;A imperative, two-step, workaround&lt;/h3&gt;
+
+&lt;p&gt;Now that our problem is clearly defined, it’s easy to come up with a two-step workaround.&lt;/p&gt;
+
+&lt;h4 id=&quot;first-find&quot;&gt;First, find…&lt;/h4&gt;
+
+&lt;p&gt;First step is just about gathering data. Vanilla loopback includes do a decent job at this. Nothing unusual here.&lt;/p&gt;
+
+&lt;h4 id=&quot;and-then-sift&quot;&gt;…and then: sift!&lt;/h4&gt;
+
+&lt;p&gt;The second step is where we keep the data we want, and discard the rest! And that’s all, check &lt;strong&gt;Fig. 4&lt;/strong&gt; below:&lt;/p&gt;
+
+&lt;p&gt;From the alternatives mentioned &lt;a href=&quot;https://github.com/strongloop/loopback/issues/517#issuecomment-53875379&quot; target=&quot;_blank&quot;&gt;in this github issue&lt;/a&gt; I liked &lt;a href=&quot;https://github.com/crcn&quot; target=&quot;_blank&quot;&gt;Craig Condon&lt;/a&gt;’s &lt;a href=&quot;https://github.com/crcn/sift.js&quot; target=&quot;_blank&quot;&gt;sift&lt;/a&gt; the most. It’s neat, simple and does its job well.&lt;/p&gt;
+
+&lt;figure class=&quot;example&quot;&gt;
+		&lt;img src=&quot;/diagrams/posts/loopback-find-n-sift/sequence_find_sift.png&quot; alt=&quot;&quot; class=&quot;plantuml&quot; /&gt;
+		&lt;figcaption class=&quot;example-figcaption&quot;&gt;
+			&lt;strong&gt;Fig. 4 | &lt;/strong&gt;Our two-step query.
+		&lt;/figcaption&gt;
+&lt;/figure&gt;
+
+&lt;p&gt;Looks a lot like that other diagram above, right? I know. It’s really that simple! :)&lt;/p&gt;
+
+&lt;h3 id=&quot;implementation&quot;&gt;Implementation&lt;/h3&gt;
+
+&lt;p&gt;Here’s the source code for our &lt;code&gt;sift.js&lt;/code&gt;:&lt;/p&gt;
+
+&lt;pre class=&quot;line-numbers&quot; style=&quot;white-space:pre-wrap;&quot;&gt;&lt;code class=&quot;language-javascript&quot;&gt;var loopbackUtils = require(&#39;loopback/lib/utils&#39;);
+var sift = require(&#39;sift&#39;);
+
+module.exports = function (app) {
+
+  // must be a subclass of PersistedModel -- we need find();
+  var siftTargets = [
+    //   &quot;Album&quot;,
+    //   &quot;Artist&quot;
+  ];
+
+  // comment this out if you don&#39;t want this added to all your models
+  var PersistedModel = app.registry.getModel(&#39;PersistedModel&#39;);
+  app.models()
+      .forEach(
+          function (Model) {
+            if (Model.prototype instanceof PersistedModel) {
+              siftTargets.push(Model.definition.name);
+            }
+          }
+      );
+
+  // let&#39;s work on the models now
+  siftTargets.forEach(
+      function (target) {
+
+        // expose as remote method
+        app.models[target].remoteMethod(
+            &quot;sift&quot;,
+            {
+              http: {
+                verb: &quot;get&quot;,
+                path: &quot;/sift&quot;
+              },
+              description: &quot;find + sift&quot;,
+              returns: [
+                {
+                  arg: target,
+                  type: &#39;[&#39; + target + &#39;]&#39;,
+                  root: true
+                }
+              ],
+              accepts: [
+                {
+                  arg: &quot;filter&quot;,
+                  type: &quot;object&quot;,
+                  required: false,
+                  description: [
+                    &quot;The usual filter, see https://docs.strongloop.com/display/public/LB/Querying+data and&quot;,
+                    &quot;please notice &#39;limit&#39; and &#39;offset&#39; are performed _before_ the sifting.&quot;
+                  ]
+                },
+                {
+                  arg: &quot;sift&quot;,
+                  type: &quot;object&quot;,
+                  required: false,
+                  description: &quot;Sift through find() results, see https://github.com/crcn/sift.js.&quot;
+                },
+                {
+                  arg: &quot;options&quot;,
+                  type: &quot;object&quot;,
+                  required: false,
+                  description: &quot;Optional options object, passed to find.&quot;
+                }
+              ]
+            }
+        );
+
+        // the sift method itself
+        app.models[target].sift = function (filterObj, siftObj, optionsObj, cb) {
+
+          // handling optional arguments
+          if (typeof filterObj == &#39;function&#39;) {
+            // only arg was the callback
+            cb = filterObj;
+            filterObj = {};
+            siftObj = {};
+            optionsObj = {};
+          }
+          else if (typeof siftObj == &#39;function&#39;) {
+            cb = siftObj;
+            siftObj = {};
+            optionsObj = {};
+          }
+          else if (typeof optionsObj == &#39;function&#39;) {
+            cb = optionsObj;
+            optionsObj = {};
+          }
+
+           cb = cb || loopbackUtils.createPromiseCallback();
+
+          app.models[target].find(
+              // filterObj = { include: { relation: &quot;posts&quot;, scope: { where: { title: { like: &quot;%Rabbit%&quot; } } } } }
+              filterObj || {},
+              optionsObj || {},
+              function (error, results) {
+                if (!error) {
+                  results.forEach(
+                      function (element, index, array) {
+                        // see https://docs.strongloop.com/display/public/LB/Include+filter#Includefilter-Accessincludedobjects
+                        array[index] = element.toJSON();
+                      }
+                  );
+                  // siftObj = { posts: { $not: { $size: 0 } }
+                  results = sift(siftObj || {}, results);
+                  cb(null, results);
+                }
+                else {
+                  cb(error, null);
+                }
+              } // find callback
+          ); // find
+
+          return cb.promise;
+
+        }; // sift
+
+      } // function
+  ); // foreach siftTargets
+}; // exports
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&quot;revisiting-that-troubled-query&quot;&gt;Revisiting that troubled query&lt;/h3&gt;
+
+&lt;p&gt;Recap: we wanted &lt;strong&gt;all albums by Pink Floyd and released by EMI&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;Now we’ll write this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-javascript&quot;&gt;Albums.sift(
+    { include: [ &#39;artist&#39;, &#39;label&#39; ] },
+    {
+      label: { name: &#39;EMI&#39; } ,
+      artist: { name: &#39;Pink Floyd&#39; }
+    },
+    cb
+  );
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And get this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;[
+  {
+    &quot;title&quot;: &quot;The Dark Side of the Moon&quot;,
+    &quot;id&quot;: 2,
+    &quot;artistId&quot;: 1,
+    &quot;labelId&quot;: 1,
+    &quot;artist&quot;: {
+      &quot;name&quot;: &quot;Pink Floyd&quot;,
+      &quot;id&quot;: 1
+    },
+    &quot;label&quot;: {
+      &quot;name&quot;: &quot;EMI&quot;,
+      &quot;id&quot;: 1
+    }
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Which is exactly what we wanted. Beautiful, right? :)&lt;/p&gt;
+
+&lt;h2 id=&quot;get-it&quot;&gt;Get it&lt;/h2&gt;
+
+&lt;h3 id=&quot;installing&quot;&gt;Installing&lt;/h3&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;install the &lt;code&gt;sift&lt;/code&gt; npm library in your project, with:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-bash&quot;&gt;npm install --save sift
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;Drop &lt;a href=&quot;http://www.github.com/The-Cat-in-the-Hack/loopback-find-sift/blob/master/server/boot/sift.js&quot;&gt;this &lt;code&gt;sift.js&lt;/code&gt; file&lt;/a&gt; in your project’s &lt;code&gt;server/boot/&lt;/code&gt; folder. At boot time, the sift method will be added to all your models, and also exposed as a remote method.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h4 id=&quot;is-the-sift-remote-method-not-appearing-on-the-api-explorer&quot;&gt;Is the sift remote method not appearing on the API Explorer?&lt;/h4&gt;
+
+&lt;p&gt;We have two things happening as a loopback app boots:&lt;/p&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;We’re adding our &lt;code&gt;sift&lt;/code&gt; remote method.&lt;/li&gt;
+  &lt;li&gt;The API Explorer is going through our models, looking for remote methods to expose.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;If the API Explorer is configured as a loopback component, then it’s most likely that our sift method will be added &lt;em&gt;after&lt;/em&gt; it. I don’t know how to tweak that.&lt;/p&gt;
+
+&lt;p&gt;The good thing is that you can enable the API Explorer from the &lt;code&gt;server/boot&lt;/code&gt; folder, instead of having it configured as a compoment. Because &lt;a href=&quot;https://docs.strongloop.com/display/public/LB/Defining+boot+scripts#Definingbootscripts-Bootscriptloadingorder&quot; target=&quot;_blank&quot;&gt;loopback executes them in alphabetical order&lt;/a&gt;, it’s just a matter or naming your files accordingly.&lt;/p&gt;
+
+&lt;h3 id=&quot;usage&quot;&gt;Usage&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;Model.sift(filter, sift, options, callback)&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;
+&lt;dl&gt;
+	&lt;dt&gt;&lt;b&gt;filter&lt;/b&gt;&lt;/dt&gt;
+	&lt;dd&gt;The first argument is the standard `filter` object we have in loopback. &lt;a href=&quot;https://docs.strongloop.com/display/public/LB/Querying+data&quot; target=&quot;_blank&quot;&gt;Check loopback&#39;s docs&lt;/a&gt; if needed. Mandatory.&lt;/dd&gt;
+	&lt;dt&gt;&lt;b&gt;sift&lt;/b&gt;&lt;/dt&gt;
+	&lt;dd&gt;The second argument is the `sift object`, which will be used to sift the results returned by your `filter object` above. Optional.&lt;/dd&gt;
+  &lt;dt&gt;&lt;b&gt;options&lt;/b&gt;&lt;/dt&gt;
+  &lt;dd&gt; The third argument is a `options` object, which, if present, will be passed to our `Model.find()` callds, As far as I&#39;m aware, it&#39;s used in loopback only for doing operations within transactions. &lt;a href=&quot;https://docs.strongloop.com/display/public/LB/Using+database+transactions#Usingdatabasetransactions-Performoperationsinatransaction&quot; target=&quot;_blank&quot;&gt;See more in the docs.&lt;/a&gt;&lt;/dd&gt;
+  &lt;dt&gt;&lt;b&gt;callback&lt;/b&gt;&lt;/dt&gt;
+  &lt;dd&gt;A callback function. If omitted, then the a promise that resolves to the results will be returned. Has this signature:
+
+    &lt;dl&gt;
+      &lt;dt&gt;&lt;b&gt;error&lt;/b&gt;&lt;/dt&gt;
+      &lt;dd&gt;The error object&lt;/dd&gt;
+      &lt;dt&gt;&lt;b&gt;results&lt;/b&gt;&lt;/dt&gt;
+      &lt;dd&gt;The results.&lt;/dd&gt;
+    &lt;/dl&gt;
+
+  &lt;/dd&gt;
+&lt;/dl&gt;
+&lt;/p&gt;
+
+&lt;h2 id=&quot;now-for-some-perspective&quot;&gt;Now, for some perspective&lt;/h2&gt;
+
+&lt;h3 id=&quot;pros&quot;&gt;Pros&lt;/h3&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;Think of the many, many custom methods you won’t be writing anymore.&lt;/li&gt;
+  &lt;li&gt;Drop-in, easy to use: let it iterate over all your Models, or give it the list of the only models you want to have this method (and its remote method).&lt;/li&gt;
+  &lt;li&gt;Data-source agnostic. Because we’re not breaking through loopback’s abstraction layers, your models can be anywhere, e.g. mongo, postgres, neo4j, etc and the sifting still works!&lt;/li&gt;
+  &lt;li&gt;A vanilla remote method, meaning it’ll appear in the swagger auto-generated documentation, you can write loopback &lt;span class=&quot;abbr&quot;&gt;ACL&lt;/span&gt;s for it, and treat it like you would any remote method of your own.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;cons&quot;&gt;Cons&lt;/h3&gt;
+
+&lt;h4 id=&quot;limit-and-offset&quot;&gt;LIMIT and OFFSET&lt;/h4&gt;
+
+&lt;p&gt;If your pagination depends on loopback &lt;code&gt;filter&lt;/code&gt;’s &lt;code&gt;offset&lt;/code&gt; and &lt;code&gt;limit&lt;/code&gt; clauses, passing these now probably won’t make much sense anymore. The sifting happens &lt;em&gt;after&lt;/em&gt; the data is gathered. In a future (rather soonish) post I’ll show a really sane way of adding pagination to any remote method, using the method on this post as an example.&lt;/p&gt;
+
+&lt;h4 id=&quot;youre-bringing-it-all-to-memory&quot;&gt;You’re bringing it all to memory!&lt;/h4&gt;
+
+&lt;p&gt;Yes, I am. Guilty as charged! That is because instead of bypassing loopback persisted model’s abstraction, we’re working &lt;em&gt;with&lt;/em&gt; it. We ask loopback for our model’s data (wherever it might live, that’s none of our business) and then we do our sifting. This way, database persistency choices can still be made on a model-by-model basis.&lt;/p&gt;
+
+&lt;p&gt;We could have picked a different route: grabbing the persisted model’s Datasource and talk, in raw queries, to the database. What many people don’t realise, until later, is that going down this route means commiting the project, from that point on, to a database choice, for one or more models, and having query code that’s in a specific database query language.&lt;/p&gt;
+
+&lt;p&gt;So it’s a performance/flexibility tradeoff we got here. I’d suggest you to starting experiment, measuring, monitoring.&lt;/p&gt;
+
+&lt;p&gt;It could be the case that in-memory filtering is not acceptable for your scenario. Then you’re probably also at a point in the road where it makes sense to make a database choice and maybe even ditch loopback’s standard models. Pick something that really fits to your use case and data needs, and by all means write your queries against it.&lt;/p&gt;
+
+&lt;p&gt;Or it might just turn out that you’re nowhere near the point where in-memory filtering is something you have to care about. Then, relax and enjoy loopback’s datasource flexibility.&lt;/p&gt;
+
+&lt;p&gt;Then keep measuring and monitoring. And run some experiment and projection scenarios every once in a while.&lt;/p&gt;
+
+&lt;p&gt;It’s a good strategy to address potential scaling problems when your metrics and experiments show that a scaling problem could exist in the horizon, otherwise you’d be just speculating and doing premature optimization. It’s not much different from the misplaced effort of implementing complex and hard-to-get-right sorting algorithms when all you got is a 20-item array – and even bubble sort couldn’t slow you enough!&lt;/p&gt;
+
+&lt;p&gt;So, again. Measure, monitor, and keep doing it.&lt;/p&gt;
+
+&lt;h2 id=&quot;what-now&quot;&gt;What now?&lt;/h2&gt;
+
+&lt;h3 id=&quot;related-resources&quot;&gt;Related resources&lt;/h3&gt;
+
+&lt;ul class=&quot;bullet&quot;&gt;
+  &lt;li&gt;This &lt;a href=&quot;https://github.com/strongloop/loopback-connector/pull/40&quot;&gt;github issue&lt;/a&gt; that drives home the point that users often think that &lt;code&gt;include&lt;/code&gt; is broken.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;As mentioned above, check the &lt;a href=&quot;https://github.com/strongloop/loopback/issues/517&quot; target=&quot;_blank&quot;&gt;Filter on level 2 properties&lt;/a&gt; issue on github. I suggest you +1 it and subscribe so you’ll know when an official solution comes around.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;The sift project on github: &lt;a href=&quot;https://github.com/crcn/sift.js&quot; target=&quot;_blank&quot;&gt;https://github.com/crcn/sift.js&lt;/a&gt;&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;This pending &lt;small&gt;(as of 2016-04-23)&lt;/small&gt; &lt;a href=&quot;https://github.com/strongloop/loopback-connector/pull/40&quot;&gt;pull request&lt;/a&gt;, with a contribution by &lt;a href=&quot;https://github.com/DiogoDoreto&quot;&gt;Diogo Doreto&lt;/a&gt; to add better &lt;code&gt;WHERE&lt;/code&gt; clauses support for &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt; datasources,. It’s been sitting there for a while, but there’s been some activity on it recently, meaning it could be on its way to the core…&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;coming-up-next&quot;&gt;Coming up next…&lt;/h3&gt;
+
+&lt;p&gt;As mentioned above, I’m working on a post about how to add beautiful, elegant, standards-compliant pagination to our remote methods! :) You might want to…&lt;/p&gt;
+
+&lt;div class=&quot;card-subscribe&quot;&gt;
+          &lt;!-- Begin MailChimp Signup Form--&gt;
+          &lt;link href=&quot;//cdn-images.mailchimp.com/embedcode/horizontal-slim-10_7.css&quot; rel=&quot;stylesheet&quot; type=&quot;text/css&quot; /&gt;
+          &lt;div id=&quot;mc_embed_signup&quot;&gt;
+            &lt;form id=&quot;mc-embedded-subscribe-form&quot; action=&quot;//the-cat-in-the-hack.us13.list-manage.com/subscribe/post?u=e89dfffd21bf9f6efd65f1424&amp;amp;id=5de23922ae&quot; method=&quot;post&quot; name=&quot;mc-embedded-subscribe-form&quot; target=&quot;_blank&quot; novalidate=&quot;&quot; class=&quot;validate&quot;&gt;
+              &lt;div id=&quot;mc_embed_signup_scroll&quot;&gt;
+                &lt;label for=&quot;mce-EMAIL&quot; style=&quot;display: block; font-family: &amp;quot;Source Sans Pro&amp;quot;&quot;&gt;Subscribe and I&#39;ll drop you a line when a fresh new post is out of the oven! :)&lt;/label&gt;
+                &lt;input id=&quot;mce-EMAIL&quot; type=&quot;email&quot; value=&quot;&quot; name=&quot;EMAIL&quot; placeholder=&quot;email address&quot; required=&quot;&quot; class=&quot;email&quot; /&gt;
+                &lt;!-- real people should not fill this in and expect good things - do not remove this or risk form bot signups--&gt;
+                &lt;div style=&quot;position: absolute; left: -5000px;&quot; aria-hidden=&quot;true&quot;&gt;
+                  &lt;input type=&quot;text&quot; name=&quot;b_e89dfffd21bf9f6efd65f1424_5de23922ae&quot; tabindex=&quot;-1&quot; value=&quot;&quot; /&gt;
+                &lt;/div&gt;
+                &lt;div style=&quot;display: inline; font-family: &amp;quot;Source Sans Pro&amp;quot;;&quot; class=&quot;clear&quot;&gt;
+                  &lt;input id=&quot;mc-embedded-subscribe&quot; type=&quot;submit&quot; value=&quot;Subscribe&quot; name=&quot;subscribe&quot; class=&quot;button&quot; /&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/form&gt;
+          &lt;/div&gt;
+          &lt;!-- End mc_embed_signup--&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;thanks&quot;&gt;Thanks&lt;/h3&gt;
+
+&lt;p&gt;For reading this far! Constructive criticism and feedback is highly appreciated! And if you need help with or around your loopback app, let me know! I’m avaliable for part-time hire or consulting arrangements.&lt;/p&gt;
+</description>
+        <pubDate>Sun, 24 Apr 2016 00:00:00 -0300</pubDate>
+        <link>/posts/Loopback-Find-n-Sift/</link>
+        <guid isPermaLink="true">/posts/Loopback-Find-n-Sift/</guid>
+      </item>
+    
+      <item>
+        <title>The Cat in the Hack</title>
+        <description>&lt;h2 id=&quot;what-will-you-find-here&quot;&gt;What will you find here?&lt;/h2&gt;
+
+&lt;p&gt;I often have the luck of picking new and interesting opensource tools to use in my projects. That’s very exciting, challenging, fun!&lt;/p&gt;
+
+&lt;p&gt;Then there’s also a cursed side of being an early adopter: when there’s little, stale, or no documentation, no community forums, no articles, talks or blog posts, sample code, or even quora or stack overflow questions around. It a roller-coaster ride!&lt;/p&gt;
+
+&lt;p&gt;Recently, my focus has been in the &lt;strong&gt;hybrid apps&lt;/strong&gt; space, using &lt;strong&gt;html&lt;/strong&gt;, &lt;strong&gt;css&lt;/strong&gt;, &lt;strong&gt;javascript&lt;/strong&gt; and &lt;strong&gt;typescript&lt;/strong&gt;, running on &lt;strong&gt;node&lt;/strong&gt; (with &lt;strong&gt;loopback&lt;/strong&gt;), on the desktop (with &lt;strong&gt;electron&lt;/strong&gt;), in the browser and on mobile devices (with &lt;strong&gt;angular&lt;/strong&gt;, &lt;strong&gt;ionic&lt;/strong&gt;, &lt;strong&gt;cordova&lt;/strong&gt;).&lt;/p&gt;
+
+&lt;p&gt;When hacking things together, sometimes we find, or come up with, something interesting, beautiful, noteworthy or just plain useful to others.&lt;/p&gt;
+
+&lt;p&gt;That’s the kind of thing I’ll be posting about, with opinion tidbits here and there, to add flavor! :)&lt;/p&gt;
+
+&lt;p&gt;Here’s the first post: &lt;a href=&quot;/posts/Loopback-Find-n-Sift/&quot;&gt;Loopback: Find &amp;amp; Sift&lt;/a&gt;!&lt;/p&gt;
+
+</description>
+        <pubDate>Sat, 23 Apr 2016 00:00:00 -0300</pubDate>
+        <link>/posts/The-Cat-in-the-Hack/</link>
+        <guid isPermaLink="true">/posts/The-Cat-in-the-Hack/</guid>
+      </item>
+    
+  </channel>
+</rss>
