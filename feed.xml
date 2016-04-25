@@ -796,18 +796,9 @@ module.exports = function (app) {
 
 &lt;ul class=&quot;bullet&quot;&gt;
   &lt;li&gt;This &lt;a href=&quot;https://github.com/strongloop/loopback-connector/pull/40&quot;&gt;github issue&lt;/a&gt; that drives home the point that users often think that &lt;code&gt;include&lt;/code&gt; is broken.&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;
-    &lt;p&gt;As mentioned above, check the &lt;a href=&quot;https://github.com/strongloop/loopback/issues/517&quot; target=&quot;_blank&quot;&gt;Filter on level 2 properties&lt;/a&gt; issue on github. I suggest you +1 it and subscribe so you’ll know when an official solution comes around.&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;The sift project on github: &lt;a href=&quot;https://github.com/crcn/sift.js&quot; target=&quot;_blank&quot;&gt;https://github.com/crcn/sift.js&lt;/a&gt;&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;This pending &lt;small&gt;(as of 2016-04-23)&lt;/small&gt; &lt;a href=&quot;https://github.com/strongloop/loopback-connector/pull/40&quot;&gt;pull request&lt;/a&gt;, with a contribution by &lt;a href=&quot;https://github.com/DiogoDoreto&quot;&gt;Diogo Doreto&lt;/a&gt; to add better &lt;code&gt;WHERE&lt;/code&gt; clauses support for &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt; datasources,. It’s been sitting there for a while, but there’s been some activity on it recently, meaning it could be on its way to the core…&lt;/p&gt;
-  &lt;/li&gt;
+  &lt;li&gt;As mentioned above, check the &lt;a href=&quot;https://github.com/strongloop/loopback/issues/517&quot; target=&quot;_blank&quot;&gt;Filter on level 2 properties&lt;/a&gt; issue on github. I suggest you +1 it and subscribe so you’ll know when an official solution comes around.&lt;/li&gt;
+  &lt;li&gt;The sift project on github: &lt;a href=&quot;https://github.com/crcn/sift.js&quot; target=&quot;_blank&quot;&gt;https://github.com/crcn/sift.js&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;This pending &lt;small&gt;(as of 2016-04-23)&lt;/small&gt; &lt;a href=&quot;https://github.com/strongloop/loopback-connector/pull/40&quot;&gt;pull request&lt;/a&gt;, with a contribution by &lt;a href=&quot;https://github.com/DiogoDoreto&quot;&gt;Diogo Doreto&lt;/a&gt; to add better &lt;code&gt;WHERE&lt;/code&gt; clauses support for &lt;span class=&quot;abbr&quot;&gt;SQL&lt;/span&gt; datasources,. It’s been sitting there for a while, but there’s been some activity on it recently, meaning it could be on its way to the core…&lt;/li&gt;
 &lt;/ul&gt;
 
 &lt;h3 id=&quot;coming-up-next&quot;&gt;Coming up next…&lt;/h3&gt;
